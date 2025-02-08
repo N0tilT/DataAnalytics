@@ -1,43 +1,75 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="utf-8">
-    <title>Select Columns</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Выбор столбцов</title>
 </head>
 <body>
-    <h1>Выберите числовые поля из {{ table }}</h1>
-    <form action="/plot" method="post">
+    <h1>Столбцы таблицы: {{ table }}</h1>
+    <form method="POST" action="/plot">
+        <label for="columns">Выберите столбцы для графика:</label><br>
+
+            {% for column, stats in statistics.items() %}
+                <input type="checkbox" name="columns" value="{{ column }}">{{ column }}<br>
+            {% endfor %}
+        <br><br>
+        
         <input type="hidden" name="table" value="{{ table }}">
-        <table>
-            <tr>
-                <td>
-                    <strong>Not IDs</strong><br>
-                    {% for column in not_ids %}
-                        <input type="checkbox" name="columns" value="{{ column }}">{{ column }}<br>
-                    {% endfor %}
-                </td>
-                <td>
-                    <strong>IDs</strong><br>
-                    {% for column in ids %}
-                        <input type="checkbox" name="columns" value="{{ column }}">{{ column }}<br>
-                    {% endfor %}
-                </td>
-            </tr>
-        </table>
-        {% if heatmap %}
-            <input type="submit" value="Построить график">
-        {% endif %}
+        <input type="submit">Построить график</button>
     </form>
+
+    <h2>Статистические характеристики столбцов:</h2>
+    <table border="1">
+        <thead>
+            <tr>
+                <th>Столбец</th>
+                <th>Доля пропусков</th>
+                <th>Макс.</th>
+                <th>Мин.</th>
+                <th>Среднее</th>
+                <th>Медиана</th>
+                <th>Дисперсия</th>
+                <th>Квантиль 0.1</th>
+                <th>Квантиль 0.9</th>
+                <th>Квартиль 1</th>
+                <th>Квартиль 3</th>
+                <th>Уникальные значения</th>
+                <th>Мода</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for column, stats in statistics.items() %}
+                <tr>
+                    <td>{{ column }}</td>
+                    <td>
+                        {% if stats.missing_ratio is not none %}
+                            {{ "{:.2f}".format(stats.missing_ratio) }}
+                        {% else %}
+                            -
+                        {% endif %}
+                    </td>
+                    <td>{{ stats.max if stats.max is not none else '-' }}</td>
+                    <td>{{ stats.min if stats.min is not none else '-' }}</td>
+                    <td>{{ stats.mean if stats.mean is not none else '-' }}</td>
+                    <td>{{ stats.median if stats.median is not none else '-' }}</td>
+                    <td>{{ stats.variance if stats.variance is not none else '-' }}</td>
+                    <td>{{ stats.quantile_0_1 if stats.quantile_0_1 is not none else '-' }}</td>
+                    <td>{{ stats.quantile_0_9 if stats.quantile_0_9 is not none else '-' }}</td>
+                    <td>{{ stats.quartile_1 if stats.quartile_1 is not none else '-' }}</td>
+                    <td>{{ stats.quartile_3 if stats.quartile_3 is not none else '-' }}</td>
+                    <td>{{ stats.unique_count if 'unique_count' in stats else '-' }}</td>
+                    <td>{{ stats.mode if 'mode' in stats else '-' }}</td>
+                </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
     {% if heatmap %}
-        <h2>Тепловая карта корреляции</h2>
-        <img src="{{ heatmap }}" alt="Correlation Heatmap">
-    {% else %}
-        <div>
-            Числовые поля не были найдены
-        </div>
+        <h2>Тепловая карта корреляции:</h2>
+        <img src="{{ heatmap }}" alt="Тепловая карта корреляции">
     {% endif %}
 
-    <br>
-    <a href="/">Назад к таблицам</a>
+    <a href="/">Вернуться на главную</a>
 </body>
 </html>

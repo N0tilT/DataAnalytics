@@ -1,3 +1,4 @@
+from sklearn.calibration import LabelEncoder
 from flask import Flask, render_template, request
 import psycopg2
 import pandas as pd
@@ -12,7 +13,7 @@ def create_app():
         connection = psycopg2.connect(
             user = 'postgres',
             password = '123Secret_a',
-            host = 'postgres',
+            host = 'localhost',
             port = '5432',
             database = 'loldb'
         )
@@ -47,36 +48,80 @@ def create_app():
         table_name = request.form['table']
         df = dataframes[table_name]
         
-        numeric = {str(x):False for x in df.columns}
-        for column in df.columns:
-            try:
-                df[column] = pd.to_numeric(df[column])
-                numeric[column]=True
-            except ValueError:
-                numeric[column]=False
-        heatmap = ""
-        if not any(numeric.values()):
-            return render_template('select_columns.html', table=table_name, columns=not_ids, heatmap=heatmap)
-        ids = []
-        not_ids = []
-        for x in df.columns:
-            if "id" not in x and numeric[x]:
-                not_ids.append(x)
-            else:
-                ids.append(x)
-        if(len(not_ids)>0):
+        # Нормализация данных
+        num_vars = df.select_dtypes(include=['float64', 'int64'])
+        cat_vars = df.select_dtypes(include=['object'])
+        print(num_vars)
+        print(cat_vars)
+        statistics = {}
+        
+        # Обработка числовых переменных
+        for column in num_vars.columns:
+            missing_ratio = num_vars[column].isnull().mean()
+            max_val = num_vars[column].max()
+            min_val = num_vars[column].min()
+            mean_val = num_vars[column].mean()
+            median_val = num_vars[column].median()
+            variance = num_vars[column].var()
+            quantile_0_1 = num_vars[column].quantile(0.1)
+            quantile_0_9 = num_vars[column].quantile(0.9)
+            quartile_1 = num_vars[column].quantile(0.25)
+            quartile_3 = num_vars[column].quantile(0.75)
+
+            # Заполнение пропусков
+            if missing_ratio > 0:
+                df[column] = df[column].fillna(mean_val)
+
+            statistics[column] = {
+                'missing_ratio': missing_ratio.item(),
+                'max': max_val.item(),
+                'min': min_val.item(),
+                'mean': mean_val.item(),
+                'median': median_val.item(),
+                'variance': variance.item(),
+                'quantile_0_1': quantile_0_1.item(),
+                'quantile_0_9': quantile_0_9.item(),
+                'quartile_1': quartile_1.item(),
+                'quartile_3': quartile_3.item()
+            }
+            print(statistics)
+        
+        # Обработка категориальных переменных
+        le = LabelEncoder()
+        for column in cat_vars.columns:
+            missing_ratio = cat_vars[column].isnull().mean()
+            unique_count = cat_vars[column].nunique()
+            mode = cat_vars[column].mode()[0]
+
+            # Применяем Label Encoding
+            df[f'{column}_Code'] = le.fit_transform(df[column])
+            df.drop(column, axis=1, inplace=True)
+
+            statistics[f'{column}_Code'] = {
+                'missing_ratio': missing_ratio.item(),
+                'unique_count': unique_count,
+                'mode': mode
+            }
+            print(statistics)
+        print("KEYS")
+        print(list(statistics.keys()))
+        print(df.columns)
+        if len(statistics) > 0:
             plt.figure(figsize=(12, 8))
-            corr_matrix = df[not_ids].corr()
+            corr_matrix = df[list(statistics.keys())].corr()
+            print(corr_matrix)
+            print(statistics)
             threshold = 0.5
 
             filtered_corr_matrix = corr_matrix[corr_matrix.abs() > threshold].dropna(how='all', axis=0).dropna(how='all', axis=1)
             sns.heatmap(filtered_corr_matrix, annot=True, cmap='coolwarm')
             plt.title('Тепловая карта корреляции')
-            plt.savefig('./web/static/correlation_heatmap.png')
+            plt.savefig('./static/correlation_heatmap.png')
             heatmap = './static/correlation_heatmap.png'
             plt.close()
-        
-        return render_template('select_columns.html', table=table_name, not_ids=not_ids, ids=ids, heatmap=heatmap)
+
+        return render_template('select_columns.html', table=table_name, not_ids=statistics.keys(), heatmap=heatmap, statistics=statistics)
+
 
     @app.route('/plot', methods=['POST'])
     def plot():
@@ -84,7 +129,7 @@ def create_app():
         selected_columns = request.form.getlist('columns')
         df = dataframes[table_name][selected_columns]
         sns.pairplot(df, diag_kind='kde')
-        plt.savefig('./web/static/plot.png')
+        plt.savefig('./static/plot.png')
         plt.close()
         
         return render_template('plot.html', plot='./static/plot.png', table=table_name)
