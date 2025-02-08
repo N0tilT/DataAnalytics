@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>Select Table</title>
+</head>
+<body>
+    <h1>Выберите таблицу</h1>
+    <form action="/select_columns" method="post">
+        <select name="table">
+            {% for table in tables %}
+                <option value="{{ table }}">{{ table }}</option>
+            {% endfor %}
+        </select>
+        <input type="submit" value="Выбрать">
+    </form>
+    <br>
+    <a href="/">Главная</a>
+</body>
+</html>

@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>Select Columns</title>
+</head>
+<body>
+    <h1>Выберите числовые поля из {{ table }}</h1>
+    <form action="/plot" method="post">
+        <input type="hidden" name="table" value="{{ table }}">
+        <table>
+            <tr>
+                <td>
+                    <strong>Not IDs</strong><br>
+                    {% for column in not_ids %}
+                        <input type="checkbox" name="columns" value="{{ column }}">{{ column }}<br>
+                    {% endfor %}
+                </td>
+                <td>
+                    <strong>IDs</strong><br>
+                    {% for column in ids %}
+                        <input type="checkbox" name="columns" value="{{ column }}">{{ column }}<br>
+                    {% endfor %}
+                </td>
+            </tr>
+        </table>
+        {% if heatmap %}
+            <input type="submit" value="Построить график">
+        {% endif %}
+    </form>
+    {% if heatmap %}
+        <h2>Тепловая карта корреляции</h2>
+        <img src="{{ heatmap }}" alt="Correlation Heatmap">
+    {% else %}
+        <div>
+            Числовые поля не были найдены
+        </div>
+    {% endif %}
+
+    <br>
+    <a href="/">Назад к таблицам</a>
+</body>
+</html>
