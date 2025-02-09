@@ -5,7 +5,7 @@ import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
 from utils import merge_dataframes
-
+from scipy import stats
 
 def create_app():
     app = Flask(__name__)
@@ -18,41 +18,17 @@ def create_app():
             database = 'loldb'
         )
         return connection
-
-    dataframes = {}
-    def init_app():
-        conn = get_connection()
-        cursor = conn.cursor()
-
-        cursor.execute("SELECT table_name FROM information_schema.tables WHERE table_schema='public'")
-        tables = cursor.fetchall()
-
-        for table in tables:
-            df = pd.read_sql_query(f'SELECT * FROM {table[0]}', conn)
-            dataframes[table[0]] = df
-        merged = merge_dataframes(dataframes,[x[0] for x in tables])
-        for item in merged:
-            dataframes[item["key"]] = item["dataframe"]
-        cursor.close()
-        conn.close()
-
-    init_app()
-
-    @app.route('/')
-    def index():
-        tables = list(dataframes.keys())
-        return render_template('index.html', tables=tables)
-
-    @app.route('/select_columns', methods=['POST'])
-    def select_columns():
-        table_name = request.form['table']
-        df = dataframes[table_name]
-        
+    def prepare_dataframe(df:pd.DataFrame):
+        for column in df.columns:
+            try:
+                df[column] = pd.to_numeric(df[column])
+            except:
+                pass
+            
         # Нормализация данных
         num_vars = df.select_dtypes(include=['float64', 'int64'])
         cat_vars = df.select_dtypes(include=['object'])
-        print(num_vars)
-        print(cat_vars)
+
         statistics = {}
         
         # Обработка числовых переменных
@@ -84,7 +60,6 @@ def create_app():
                 'quartile_1': quartile_1.item(),
                 'quartile_3': quartile_3.item()
             }
-            print(statistics)
         
         # Обработка категориальных переменных
         le = LabelEncoder()
@@ -102,15 +77,54 @@ def create_app():
                 'unique_count': unique_count,
                 'mode': mode
             }
-            print(statistics)
-        print("KEYS")
-        print(list(statistics.keys()))
-        print(df.columns)
+        return statistics
+    dataframes = {}
+    def init_app():
+        conn = get_connection()
+        cursor = conn.cursor()
+
+        cursor.execute("SELECT table_name FROM information_schema.tables WHERE table_schema='public'")
+        tables = cursor.fetchall()
+
+        for table in tables:
+            df = pd.read_sql_query(f'SELECT * FROM {table[0]}', conn)
+            dataframes[table[0]] = df
+        merged = merge_dataframes(dataframes,[x[0] for x in tables])
+        for item in merged:
+            dataframes[item["key"]] = item["dataframe"]
+        cursor.close()
+        conn.close()
+
+        df = dataframes['stats1']
+        print("Рассмотрим таблицу stats1")
+        prepare_dataframe(df)
+        print(df.info())
+        # Гипотеза 1        
+        group1_g = df[df['win'] == 1]['goldearned']
+        group2_g = df[df['win'] == 0]['goldearned']
+        t_stat, p_value = stats.ttest_ind(group1_g, group2_g, equal_var=False)
+        print(f'Гипотеза 1. Выигрывающая команда зарабатывает больше золота, чем проигравшая: t-stat = {t_stat}, p-value = {p_value}')
+        # Гипотеза 2
+        win_kills = df[df['win'] == 1]['kills']
+        lose_kills = df[df['win'] == 0]['kills']
+        t_stat, p_value = stats.ttest_ind(win_kills, lose_kills)
+        print(f'Гипотеза 2. Выигрывающая команда имеет больше убйиств, чем проигравшая: t-stat = {t_stat}, p-value = {p_value}')
+
+    init_app()
+
+    @app.route('/')
+    def index():
+        tables = list(dataframes.keys())
+        return render_template('index.html', tables=tables)
+
+    @app.route('/select_columns', methods=['POST'])
+    def select_columns():
+        table_name = request.form['table']
+        df = dataframes[table_name]
+        statistics = prepare_dataframe(df)        
         if len(statistics) > 0:
             plt.figure(figsize=(12, 8))
             corr_matrix = df[list(statistics.keys())].corr()
-            print(corr_matrix)
-            print(statistics)
             threshold = 0.5
 
             filtered_corr_matrix = corr_matrix[corr_matrix.abs() > threshold].dropna(how='all', axis=0).dropna(how='all', axis=1)
