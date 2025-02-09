@@ -13,7 +13,7 @@ def create_app():
         connection = psycopg2.connect(
             user = 'postgres',
             password = '123Secret_a',
-            host = 'localhost',
+            host = 'postgres',
             port = '5432',
             database = 'loldb'
         )
